@@ -74,37 +74,46 @@ export default function LoginView({ onLogin }: LoginViewProps) {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-error/10 border border-error/20 flex items-start gap-3 text-error text-sm">
-            <ShieldAlert className="w-5 h-5 flex-shrink-0" />
+          <div
+            id="login-error"
+            className="mb-6 p-4 rounded-xl bg-error/10 border border-error/20 flex items-start gap-3 text-error text-sm"
+            role="alert"
+            aria-live="assertive"
+          >
+            <ShieldAlert className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
+            <label htmlFor="email-input" className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
               Email Address
             </label>
             <input
+              id="email-input"
               type="email"
               required
               placeholder="e.g., fan@fifa.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              aria-describedby={error ? "login-error" : undefined}
               className="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary transition-all"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
+            <label htmlFor="password-input" className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
               Password
             </label>
             <input
+              id="password-input"
               type="password"
               required
               placeholder="e.g., fifa"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-describedby={error ? "login-error" : undefined}
               className="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-4 py-3 text-on-surface focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary transition-all"
             />
           </div>
@@ -137,9 +146,10 @@ export default function LoginView({ onLogin }: LoginViewProps) {
         <button
           onClick={handleQuickLogin}
           type="button"
+          aria-label="Quick Login: fill credentials fan@fifa.com and fifa"
           className="w-full bg-surface-container border border-white/5 hover:border-secondary/20 hover:bg-white/5 text-on-surface text-sm font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 group"
         >
-          <Sparkles className="w-4 h-4 text-secondary group-hover:animate-pulse" />
+          <Sparkles className="w-4 h-4 text-secondary group-hover:animate-pulse" aria-hidden="true" />
           <span>Quick Login (fan@fifa.com / fifa)</span>
         </button>
       </div>

@@ -8,6 +8,7 @@ import AIAssistantView from "./components/AIAssistantView";
 import CrowdProfileView from "./components/CrowdProfileView";
 import SoccerGameView from "./components/SoccerGameView";
 import MatchScheduleView from "./components/MatchScheduleView";
+import OperationsPortal from "./components/OperationsPortal";
 import { 
   Compass, 
   Ticket as TicketIcon, 
@@ -21,12 +22,13 @@ import {
   CheckCircle,
   Menu,
   Sparkles,
-  Calendar
+  Calendar,
+  Building2
 } from "lucide-react";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<"stadium" | "tickets" | "assistant" | "crowd" | "shootout" | "schedule">("stadium");
+  const [activeTab, setActiveTab] = useState<"stadium" | "tickets" | "assistant" | "crowd" | "shootout" | "schedule" | "operations">("stadium");
   const [tickets, setTickets] = useState<Ticket[]>(INITIAL_TICKETS);
   const [darkMode, setDarkMode] = useState(true);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -244,6 +246,20 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setActiveTab("operations")}
+            className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-display font-bold text-sm transition-all text-left duration-200 hover:translate-x-1 ${
+              activeTab === "operations"
+                ? "bg-primary-container text-on-primary border-l-4 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.2)]"
+                : "text-on-surface-variant hover:bg-white/5"
+            }`}
+            id="desktop-nav-operations-button"
+            aria-label="Operations Command Center"
+          >
+            <Building2 className="w-5 h-5 text-red-400" aria-hidden="true" />
+            <span>Operations</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("shootout")}
             className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl font-display font-bold text-sm transition-all text-left duration-200 hover:translate-x-1 ${
               activeTab === "shootout"
@@ -302,6 +318,9 @@ export default function App() {
         {activeTab === "crowd" && (
           <CrowdProfileView />
         )}
+        {activeTab === "operations" && (
+          <OperationsPortal />
+        )}
         {activeTab === "shootout" && (
           <SoccerGameView />
         )}
@@ -355,6 +374,20 @@ export default function App() {
         >
           <MessageSquare className="w-4 h-4" />
           <span className="text-[9px] font-mono font-bold mt-1 uppercase">AI Chat</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("operations")}
+          className={`flex flex-col items-center justify-center rounded-xl px-2.5 py-1.5 transition-all duration-200 active:scale-90 ${
+            activeTab === "operations"
+              ? "bg-red-600/80 text-white shadow-[0_0_12px_rgba(248,113,113,0.4)]"
+              : "text-on-surface-variant/70 hover:text-on-surface"
+          }`}
+          id="mobile-nav-operations-button"
+          aria-label="Operations Command Center"
+        >
+          <Building2 className="w-4 h-4" aria-hidden="true" />
+          <span className="text-[9px] font-mono font-bold mt-1 uppercase">Ops</span>
         </button>
 
         <button

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: pitch-precision-26
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: OPENROUTER_API_KEY
+        sync: false   # Set this manually in Render dashboard → Environment
+      - key: GEMINI_API_KEY
+        sync: false   # Set this manually in Render dashboard → Environment
+      - key: APP_URL
+        sync: false   # Render will give you a URL after first deploy; paste it here 

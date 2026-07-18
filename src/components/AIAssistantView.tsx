@@ -207,20 +207,18 @@ How can I assist you today?
         <button
           onClick={handleClear}
           title="Reset conversation"
-          aria-label="Reset chat conversation"
           className="text-on-surface-variant/60 hover:text-error p-2 rounded-lg bg-surface-container border border-white/10 active:scale-95 duration-150"
         >
-          <RefreshCw className="w-4 h-4" aria-hidden="true" />
+          <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
       {/* Suggestion Chips Row */}
-      <div className="bg-surface-container-low/40 px-4 py-3 border-b border-white/5 flex gap-2 overflow-x-auto scrollbar-none scroll-smooth select-none" role="group" aria-label="Quick suggestion prompts">
+      <div className="bg-surface-container-low/40 px-4 py-3 border-b border-white/5 flex gap-2 overflow-x-auto scrollbar-none scroll-smooth select-none">
         {SUGGESTIONS.map((s, idx) => (
           <button
             key={idx}
             onClick={() => handleSend(s)}
-            aria-label={`Ask: ${s}`}
             className="flex-shrink-0 bg-surface-container/50 border border-white/5 hover:border-tertiary/30 hover:bg-white/5 text-[10px] font-medium text-on-surface px-3 py-1.5 rounded-lg transition-all"
           >
             {s}
@@ -229,7 +227,7 @@ How can I assist you today?
       </div>
 
       {/* Messages Conversation Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4" aria-live="polite" aria-label="Chat conversation" role="log">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map((m) => {
           const isUser = m.role === "user";
           return (
@@ -275,8 +273,8 @@ How can I assist you today?
 
         {/* Loading Indicator */}
         {isTyping && (
-          <div className="flex gap-3 mr-auto max-w-[70%]" aria-label="AI is thinking" role="status">
-            <div className="w-8 h-8 rounded-full bg-tertiary-container/20 border border-tertiary/10 flex items-center justify-center text-tertiary text-xs font-bold" aria-hidden="true">
+          <div className="flex gap-3 mr-auto max-w-[70%]">
+            <div className="w-8 h-8 rounded-full bg-tertiary-container/20 border border-tertiary/10 flex items-center justify-center text-tertiary text-xs font-bold">
               🤖
             </div>
             <div className="bg-surface-container-low/60 border border-white/5 rounded-2xl px-5 py-3.5 flex items-center gap-1.5">
@@ -292,23 +290,19 @@ How can I assist you today?
 
       {/* Typing bar input */}
       <div className="p-4 bg-surface-container/30 border-t border-white/5 flex gap-3 z-10">
-        <label htmlFor="ai-chat-input" className="sr-only">Message the AI assistant</label>
         <input
-          id="ai-chat-input"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Ask AI about seating comfort, shaded rows, concessions..."
-          aria-label="Message the AI assistant"
           className="flex-1 bg-surface-container-lowest border border-white/10 rounded-xl py-3.5 px-4 text-xs text-on-surface focus:outline-none focus:border-tertiary focus:ring-1 focus:ring-tertiary transition-all"
         />
         <button
           onClick={() => handleSend()}
-          aria-label="Send message"
           className="w-12 h-12 rounded-xl bg-gradient-to-r from-primary to-tertiary hover:opacity-90 active:scale-95 transition-all text-on-primary flex items-center justify-center shadow-lg cursor-pointer"
         >
-          <Send className="w-4 h-4" aria-hidden="true" />
+          <Send className="w-4 h-4" />
         </button>
       </div>
     </div>

@@ -348,26 +348,8 @@ export default function SeatPanoramicPreview({ seat }: SeatPanoramicPreviewProps
     return () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
-
-      // Traverse and dispose all Three.js resources to prevent GPU memory leaks
-      scene.traverse((object) => {
-        if ((object as THREE.Mesh).isMesh) {
-          const mesh = object as THREE.Mesh;
-          if (mesh.geometry) {
-            mesh.geometry.dispose();
-          }
-          if (Array.isArray(mesh.material)) {
-            mesh.material.forEach((mat) => mat.dispose());
-          } else if (mesh.material) {
-            (mesh.material as THREE.Material).dispose();
-          }
-        }
-      });
-      scene.clear();
       renderer.dispose();
-      renderer.forceContextLoss();
     };
-
   }, [seat]);
 
   // Mouse Drag / Touch Swipe Mechanics for Panoramic Look-Around

@@ -1,0 +1,6 @@
+{
+  "name": "Pitch Precision 26",
+  "description": "Interactive 3D-assisted stadium seating selector and match assistant for FIFA World Cup 2026 with real-time AI crowd profile and ticketing analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

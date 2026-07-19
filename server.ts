@@ -1,16 +1,74 @@
-import express from "express";
+/**
+ * Pitch Precision 26 — Express Server
+ *
+ * Serves the React SPA (via Vite dev middleware or static files in production)
+ * and exposes a secured AI chat endpoint at POST /api/ai/chat.
+ *
+ * Security: Helmet headers, CORS, rate limiting, input validation, payload limits.
+ */
+import express, { Request, Response, NextFunction } from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { OpenRouter } from "@openrouter/sdk";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import {
+  formatMessagesForProvider,
+  validateChatRequest,
+} from "./src/lib/server/chatValidation";
+import {
+  extractCompletionContent,
+  type CompletionResponse,
+} from "./src/lib/server/completionParser";
 
 dotenv.config();
 
+// ── Environment validation ───────────────────────────────────────────────────
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const PORT = parseInt(process.env.PORT || "3000", 10);
+const APP_URL = process.env.APP_URL || "https://ai.studio/build";
+const NODE_ENV = process.env.NODE_ENV || "development";
 
-async function startServer() {
+if (!OPENROUTER_API_KEY) {
+  console.warn(
+    "⚠️  OPENROUTER_API_KEY is not set. The AI assistant will use fallback responses."
+  );
+}
+
+interface ChatSendClient {
+  chat: {
+    send: (args: {
+      chatRequest: { model: string; messages: Array<{ role: string; content: string }> };
+    }) => Promise<CompletionResponse>;
+  };
+}
+
+/** Send a chat completion request through the OpenRouter SDK. */
+async function sendChatCompletion(
+  client: OpenRouter,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+): Promise<CompletionResponse> {
+  return (client as unknown as ChatSendClient).chat.send({
+    chatRequest: { model, messages },
+  });
+}
+
+const AI_FALLBACK_RESPONSE = `✅ **FIFA 2026 Stadium Assistant Ready**
+
+Based on the live match — **Brazil 2-1 France (72')** — here's what I can help with:
+
+- 🗺️ **Navigation**: Gate A is MODERATE (8-min queue). Gate D is CLEAR.
+- ♿ **Accessibility**: Wheelchair escorts available at Gates A & C. Sensory room open at Level 2 near Sec 110-A.
+- 🚌 **Transit**: Next NJ Transit shuttle from Secaucus Junction departs in 6 minutes.
+- 🌱 **Sustainability**: Recycling diversion at 68%. Use blue bins for recyclables, green for food waste.
+- 🎫 **Seats**: Category 2 corners (Section 215, $180) offer shaded sightlines. VIP Section 101 ($450) for full luxury.
+
+What specific assistance do you need?`;
+
+// ── Server ───────────────────────────────────────────────────────────────────
+async function startServer(): Promise<void> {
   const app = express();
 
   // ── Security: HTTP headers via Helmet ──────────────────────────────────────
@@ -31,14 +89,29 @@ async function startServer() {
     })
   );
 
-  app.use(express.json({ limit: "50kb" })); // Limit payload size
+  // ── CORS: Restrict origins in production ───────────────────────────────────
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const allowedOrigins = NODE_ENV === "production"
+      ? [APP_URL]
+      : ["http://localhost:3000", "http://localhost:5173"];
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+    next();
+  });
 
-  const PORT = process.env.PORT || 3000;
+  app.use(express.json({ limit: "50kb" }));
 
   // ── Rate Limiter: Protect AI endpoint from abuse ───────────────────────────
   const aiRateLimiter = rateLimit({
-    windowMs: 60 * 1000, // 1 minute window
-    max: 20, // 20 requests per minute per IP
+    windowMs: 60 * 1000,
+    max: 20,
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -48,14 +121,16 @@ async function startServer() {
 
   // ── Lazy initialize OpenRouter client ──────────────────────────────────────
   let openRouterClient: OpenRouter | null = null;
-  function getOpenRouter() {
+
+  /** Returns a cached OpenRouter client instance. Throws if API key is missing. */
+  function getOpenRouter(): OpenRouter {
     if (!openRouterClient) {
       if (!OPENROUTER_API_KEY) {
         throw new Error("OPENROUTER_API_KEY is not defined");
       }
       openRouterClient = new OpenRouter({
         apiKey: OPENROUTER_API_KEY,
-        httpReferer: process.env.APP_URL || "https://ai.studio/build",
+        httpReferer: APP_URL,
         appTitle: "Pitch Precision 26",
       });
     }
@@ -63,26 +138,18 @@ async function startServer() {
   }
 
   // ── AI Chat Endpoint ───────────────────────────────────────────────────────
-  app.post("/api/ai/chat", aiRateLimiter, async (req, res) => {
+  app.post("/api/ai/chat", aiRateLimiter, async (req: Request, res: Response) => {
     try {
-      const { messages, context } = req.body;
-
-      // Input validation
-      if (!messages || !Array.isArray(messages)) {
-        return res.status(400).json({ error: "Invalid request: messages must be an array." });
-      }
-      if (messages.length > 50) {
-        return res.status(400).json({ error: "Too many messages in conversation history." });
-      }
-      for (const msg of messages) {
-        if (typeof msg.content !== "string" || msg.content.length > 4000) {
-          return res.status(400).json({ error: "Invalid message format or content too long." });
-        }
-        if (!["user", "assistant", "model", "system"].includes(msg.role)) {
-          return res.status(400).json({ error: "Invalid message role." });
-        }
+      if (!req.is("application/json")) {
+        return res.status(415).json({ error: "Content-Type must be application/json." });
       }
 
+      const validation = validateChatRequest(req.body);
+      if (!validation.ok) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      const { messages, context } = validation.data;
       const client = getOpenRouter();
 
       // ── Comprehensive FIFA 2026 World Cup Stadium AI System Prompt ───────
@@ -159,71 +226,57 @@ User Context: ${JSON.stringify(context || {})}`,
 
       const formattedMessages = [
         systemMessage,
-        ...messages.map((m: { role: string; content: string }) => ({
-          role: m.role === "user" ? "user" : "assistant",
-          content: m.content,
-        })),
+        ...formatMessagesForProvider(messages),
       ];
 
       let responseContent = "";
 
       try {
-        const completion: any = await (client.chat as any).send({
-          chatRequest: {
-            model: "openai/gpt-4o-mini",
-            messages: formattedMessages,
-          },
-        } as any);
-
-        if (completion?.choices?.[0]) {
-          responseContent = completion.choices[0].message.content || "";
-        } else if (completion?.message?.content) {
-          responseContent = completion.message.content;
-        } else {
+        const completion = await sendChatCompletion(client, "openai/gpt-4o-mini", formattedMessages);
+        responseContent = extractCompletionContent(completion);
+        if (!responseContent) {
           throw new Error("No choices returned from OpenRouter API.");
         }
-      } catch (err: any) {
-        console.warn("Primary model failed, trying fallback:", err.message);
+      } catch (err: unknown) {
+        const primaryError = err instanceof Error ? err.message : "Unknown error";
+        console.warn("Primary model failed, trying fallback:", primaryError);
         try {
-          const fallbackCompletion: any = await (client.chat as any).send({
-            chatRequest: {
-              model: "google/gemini-2.5-flash",
-              messages: formattedMessages,
-            },
-          } as any);
-
-          if (fallbackCompletion?.choices?.[0]) {
-            responseContent = fallbackCompletion.choices[0].message.content || "";
-          } else if (fallbackCompletion?.message?.content) {
-            responseContent = fallbackCompletion.message.content;
-          } else {
+          const fallbackCompletion = await sendChatCompletion(
+            client,
+            "google/gemini-2.5-flash",
+            formattedMessages,
+          );
+          responseContent = extractCompletionContent(fallbackCompletion);
+          if (!responseContent) {
             throw err;
           }
-        } catch (fallbackErr: any) {
-          console.error("All AI gateways failed:", fallbackErr.message);
-          responseContent = `✅ **FIFA 2026 Stadium Assistant Ready**
-
-Based on the live match — **Brazil 2-1 France (72')** — here's what I can help with:
-
-- 🗺️ **Navigation**: Gate A is MODERATE (8-min queue). Gate D is CLEAR.
-- ♿ **Accessibility**: Wheelchair escorts available at Gates A & C. Sensory room open at Level 2 near Sec 110-A.
-- 🚌 **Transit**: Next NJ Transit shuttle from Secaucus Junction departs in 6 minutes.
-- 🌱 **Sustainability**: Recycling diversion at 68%. Use blue bins for recyclables, green for food waste.
-- 🎫 **Seats**: Category 2 corners (Section 215, $180) offer shaded sightlines. VIP Section 101 ($450) for full luxury.
-
-What specific assistance do you need?`;
+        } catch (fallbackErr: unknown) {
+          const fbMessage = fallbackErr instanceof Error ? fallbackErr.message : "Unknown error";
+          console.error("All AI gateways failed:", fbMessage);
+          responseContent = AI_FALLBACK_RESPONSE;
         }
       }
 
       res.json({ content: responseContent });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "An error occurred during AI processing.";
       console.error("AI endpoint error:", error);
-      res.status(500).json({ error: error.message || "An error occurred during AI processing." });
+      res.status(500).json({ error: errorMessage });
     }
   });
 
+  // ── Health check endpoint ──────────────────────────────────────────────────
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({
+      status: "ok",
+      version: "1.0.0",
+      uptime: process.uptime(),
+      environment: NODE_ENV,
+    });
+  });
+
   // ── Vite middleware for development ────────────────────────────────────────
-  if (process.env.NODE_ENV !== "production") {
+  if (NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -232,13 +285,15 @@ What specific assistance do you need?`;
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`🏟️  Pitch Precision 26 server running on http://localhost:${PORT}`);
+    console.log(`   Environment: ${NODE_ENV}`);
+    console.log(`   AI API Key: ${OPENROUTER_API_KEY ? "✅ configured" : "⚠️  missing"}`);
   });
 }
 

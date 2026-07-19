@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// jsdom intentionally omits layout APIs. Components only need the method to
+// exist, so a harmless stub preserves the browser contract in unit tests.
+Element.prototype.scrollIntoView = vi.fn();
+
 // Mock canvas / WebGL for components that use Three.js
 HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
   clearRect: vi.fn(),

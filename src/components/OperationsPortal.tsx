@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Zap, Users, Bus, Leaf, ShieldAlert, Radio,
   CheckCircle2, Clock, MapPin, Sparkles, Send,
   AlertTriangle, Wifi, RefreshCw, ChevronRight, Activity
 } from "lucide-react";
+import MarkdownMessage from "./MarkdownMessage";
+import { useAutoScroll } from "../hooks/useAutoScroll";
+import { requestAssistantReply } from "../lib/ai";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface OpsMessage {
@@ -67,19 +70,6 @@ const getPriorityBadge = (priority: string) => {
   return "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
 };
 
-const formatMarkdownSimple = (text: string) => {
-  return text.split("\n").map((line, i) => {
-    if (line.startsWith("## "))
-      return <h3 key={i} className="font-display font-bold text-sm text-on-surface mt-3 mb-1">{line.replace("## ", "")}</h3>;
-    if (line.startsWith("### "))
-      return <h4 key={i} className="font-display font-bold text-xs text-tertiary mt-2 mb-0.5">{line.replace("### ", "")}</h4>;
-    if (line.trim().startsWith("- ") || line.trim().startsWith("* "))
-      return <li key={i} className="ml-4 list-disc text-xs text-on-surface-variant leading-relaxed mb-0.5">{line.trim().replace(/^[-*] /, "")}</li>;
-    if (line.trim() === "") return <div key={i} className="h-1.5" />;
-    return <p key={i} className="text-xs text-on-surface-variant leading-relaxed mb-1">{line}</p>;
-  });
-};
-
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function OperationsPortal() {
   const [activeSection, setActiveSection] = useState<"command" | "accessibility" | "sustainability">("command");
@@ -105,10 +95,10 @@ How can I assist your operations today?`,
   const [isLoading, setIsLoading] = useState(false);
   const [accRequests, setAccRequests] = useState<AccessibilityRequest[]>(INITIAL_ACC_REQUESTS);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  useAutoScroll(messagesEndRef, [messages, isLoading]);
+  useEffect(() => () => requestControllerRef.current?.abort(), []);
 
   const handleQuery = async (query?: string) => {
     const text = (query || inputQuery).trim();
@@ -116,32 +106,31 @@ How can I assist your operations today?`,
     if (!query) setInputQuery("");
 
     const userMsg: OpsMessage = { id: `u-${Date.now()}`, role: "user", content: text, timestamp: new Date() };
-    setMessages((prev) => [...prev, userMsg]);
+    const conversation = [...messages, userMsg];
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    setMessages(conversation);
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...messages, userMsg].map((m) => ({
-            role: m.role === "ai" ? "assistant" : "user",
-            content: m.content,
-          })),
-          context: {
-            role,
-            mode: "operations",
-            activeGates: GATE_DATA,
-            currentMatch: "Brazil vs France 2-1 (72')",
-          },
-        }),
-      });
-      const data = await response.json();
+      const content = await requestAssistantReply(
+        conversation.map((message) => ({
+          role: message.role === "ai" ? "assistant" : "user",
+          content: message.content,
+        })),
+        {
+          role,
+          mode: "operations",
+          currentMatch: "Brazil vs France 2-1 (72')",
+        },
+        controller.signal,
+      );
       setMessages((prev) => [
         ...prev,
-        { id: `ai-${Date.now()}`, role: "ai", content: data.content || "No response.", timestamp: new Date() },
+        { id: `ai-${Date.now()}`, role: "ai", content, timestamp: new Date() },
       ]);
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       setMessages((prev) => [
         ...prev,
         {
@@ -152,7 +141,10 @@ How can I assist your operations today?`,
         },
       ]);
     } finally {
-      setIsLoading(false);
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+        setIsLoading(false);
+      }
     }
   };
 
@@ -289,7 +281,11 @@ How can I assist your operations today?`,
                       ? "bg-surface-container-high border-white/10"
                       : "bg-surface-container-low/60 border-white/5"
                   }`}>
-                    <div className="space-y-0.5">{formatMarkdownSimple(m.content)}</div>
+                    <MarkdownMessage
+                      content={m.content}
+                      headingClassName="font-display font-bold text-sm text-on-surface mt-3 mb-1"
+                      subheadingClassName="font-display font-bold text-xs text-tertiary mt-2 mb-1"
+                    />
                     <div className="text-[8px] text-on-surface-variant/30 font-mono mt-1 text-right">
                       {m.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </div>

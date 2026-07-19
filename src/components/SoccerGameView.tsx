@@ -35,7 +35,7 @@ export default function SoccerGameView() {
   const playSound = (type: "kick" | "goal" | "save" | "cheer") => {
     if (isMuted) return;
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContext = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
       

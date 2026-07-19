@@ -55,7 +55,9 @@ sections.forEach((sec, sIdx) => {
         number: num,
         category: sec.category,
         price: sec.price,
-        isAvailable: Math.random() > 0.35, // 65% availability
+        // Deterministic mock availability keeps the map stable across renders,
+        // tests, and server/client hydration while preserving a realistic mix.
+        isAvailable: ((sIdx * 31 + rIdx * 11 + num * 7) % 100) < 65,
         isAccessible: sec.accessible,
         isShaded: sec.shaded,
         x,
@@ -66,6 +68,11 @@ sections.forEach((sec, sIdx) => {
     }
   });
 });
+
+/** Fast lookup for ticket-to-seat reconciliation in the application shell. */
+export const SEAT_ID_BY_LOCATION = new Map(
+  SEATS.map((seat) => [`${seat.section}:${seat.row}:${seat.number}`, seat.id]),
+);
 
 // Mock Initial Tickets
 export const INITIAL_TICKETS: Ticket[] = [
